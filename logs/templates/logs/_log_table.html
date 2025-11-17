@@ -1,0 +1,87 @@
+{% comment %}Tabela de logs reutilizável para dashboard e outras telas{% endcomment %}
+<div class="table-responsive" style="max-height: 520px; overflow-y: auto; overflow-x: auto; border-radius: 8px; border: 1px solid #dee2e6;">
+  <table class="table table-bordered table-hover align-middle mb-0" style="font-size:1em; min-width: 1500px;">
+    <thead class="table-light sticky-top" style="position: sticky; top: 0; z-index: 2;">
+      <tr>
+        <th style="width: 130px;">Data/Hora Log</th>
+        <th style="width: 80px;">Tipo</th>
+        <th style="width: 120px;">Origem</th>
+        <th style="width: 200px;">Mensagem Agendada</th>
+        <th style="width: 120px;">Canal</th>
+        <th style="width: 110px;">Conexão</th>
+        <th style="width: 120px;">Usuário</th>
+        <th style="width: 140px;">Data/Hora Evento</th>
+        <th style="width: 220px;">Erro</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in page_obj %}
+      <tr>
+        <td class="text-nowrap">
+          {{ log.criado_em|date:'d/m/Y' }}<br>
+          {{ log.criado_em|date:'H:i:s' }}
+        </td>
+        <td>
+          {% if log.tipo == 'info' %}<span class="badge bg-success" style="font-size:0.95em;padding:6px 12px;">Sucesso</span>{% endif %}
+          {% if log.tipo == 'erro' %}<span class="badge bg-danger" style="font-size:0.95em;padding:6px 12px;">Erro</span>{% endif %}
+          {% if log.tipo == 'warning' %}<span class="badge bg-warning text-dark" style="font-size:0.95em;padding:6px 12px;">Aviso</span>{% endif %}
+        </td>
+        <td class="text-break">{{ log.origem }}</td>
+        <td class="text-break">{% if log.mensagem %}<a href="{% url 'scheduled_message_edit' log.mensagem.id %}">{{ log.mensagem }}</a>{% endif %}</td>
+        <td class="text-break">{{ log.canal_nome }}</td>
+        <td>
+          {% if log.status_conexao is not None %}
+            {% if log.status_conexao %}
+              <span class="badge bg-success">OK</span>
+            {% else %}
+              <span class="badge bg-danger" title="{{ log.status_conexao_msg }}">Falha</span>
+            {% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td class="text-break">{{ log.usuario_nome }}</td>
+        <td class="text-break">
+          {% if log.data_evento_br %}{{ log.data_evento_br }}<br>{% endif %}
+          {% if log.hora_evento_br %}{{ log.hora_evento_br }}{% endif %}
+        </td>
+        <td class="text-break">{{ log.erro }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="9" class="text-center">Nenhum log encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if not dashboard_logs %}
+<nav aria-label="Paginação de logs" class="mt-3">
+  <ul class="pagination justify-content-center">
+    {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Anterior</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Próxima</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Próxima</span></li>
+    {% endif %}
+  </ul>
+  <div class="text-center text-muted small mb-2">Total de registros: {{ total_logs }}</div>
+</nav>
+{% else %}
+  <div class="text-center mt-3">
+    <a href="/logs/" class="btn btn-outline-primary" target="_blank" rel="noopener">Ver todos os logs</a>
+  </div>
+{% endif %}
+<style>
+  .table thead th { vertical-align: middle; text-align: center; background: #f8f9fa; white-space: nowrap; }
+  .table thead.sticky-top th { position: sticky; top: 0; z-index: 2; background: #f8f9fa; }
+  .table tbody td { vertical-align: middle; }
+  .table-responsive { scrollbar-width: thin; }
+  .table td { white-space: normal; }
+  .table td.text-nowrap { white-space: nowrap; }
+  @media (max-width: 1200px) {
+    .table-responsive { max-height: 400px; }
+    .table { font-size: 0.95em; }
+  }
+</style> 

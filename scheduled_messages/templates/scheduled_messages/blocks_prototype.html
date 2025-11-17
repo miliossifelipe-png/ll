@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5" style="max-width: 900px;">
+  <h2 class="mb-4">Montar Mensagem por Blocos</h2>
+  <div class="mb-3">
+    <button class="btn btn-outline-primary me-2" onclick="showBlockType('texto')">Adicionar Texto</button>
+    <button class="btn btn-outline-primary me-2" onclick="showBlockType('emoji')">Adicionar Emoji</button>
+    <button class="btn btn-outline-primary me-2" onclick="showBlockType('arquivo')">Adicionar Arquivo</button>
+    <button class="btn btn-outline-primary me-2" onclick="showBlockType('audio')">Adicionar Áudio</button>
+    <button class="btn btn-outline-primary me-2" onclick="showBlockType('imagem')">Adicionar Imagem</button>
+  </div>
+  <form id="blocosForm" onsubmit="return false;">
+    <div id="blocosLista" class="mb-4"></div>
+    <button class="btn btn-success" onclick="salvarFluxo()">Salvar Fluxo (Protótipo)</button>
+  </form>
+</div>
+
+<!-- Modal para adicionar/editar bloco -->
+<div class="modal fade" id="blocoModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">Adicionar Bloco</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formBloco" onsubmit="return false;">
+          <input type="hidden" id="editIndex">
+          <input type="hidden" id="tipoBloco">
+          <div id="campoTexto" class="mb-3" style="display:none;">
+            <label class="form-label">Texto</label>
+            <textarea class="form-control" id="inputTexto" rows="3"></textarea>
+          </div>
+          <div id="campoEmoji" class="mb-3" style="display:none;">
+            <label class="form-label">Emoji</label>
+            <input type="text" class="form-control" id="inputEmoji" maxlength="2" placeholder="😀">
+          </div>
+          <div id="campoArquivo" class="mb-3" style="display:none;">
+            <label class="form-label">Arquivo</label>
+            <input type="file" class="form-control" id="inputArquivo">
+          </div>
+          <div id="campoAudio" class="mb-3" style="display:none;">
+            <label class="form-label">Áudio</label>
+            <input type="file" class="form-control" id="inputAudio" accept="audio/*">
+          </div>
+          <div id="campoImagem" class="mb-3" style="display:none;">
+            <label class="form-label">Imagem</label>
+            <input type="file" class="form-control" id="inputImagem" accept="image/*">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="adicionarOuEditarBloco()">Salvar Bloco</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let blocos = [];
+
+function showBlockType(tipo, index=null) {
+  document.getElementById('formBloco').reset();
+  document.getElementById('editIndex').value = index !== null ? index : '';
+  document.getElementById('tipoBloco').value = tipo;
+  // Esconde todos
+  ['campoTexto','campoEmoji','campoArquivo','campoAudio','campoImagem'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  // Mostra o campo correto
+  if (tipo === 'texto') document.getElementById('campoTexto').style.display = 'block';
+  if (tipo === 'emoji') document.getElementById('campoEmoji').style.display = 'block';
+  if (tipo === 'arquivo') document.getElementById('campoArquivo').style.display = 'block';
+  if (tipo === 'audio') document.getElementById('campoAudio').style.display = 'block';
+  if (tipo === 'imagem') document.getElementById('campoImagem').style.display = 'block';
+  // Se for edição, preenche os campos
+  if (index !== null) {
+    const bloco = blocos[index];
+    if (bloco.tipo === 'texto') document.getElementById('inputTexto').value = bloco.conteudo;
+    if (bloco.tipo === 'emoji') document.getElementById('inputEmoji').value = bloco.conteudo;
+    // Arquivo, áudio, imagem: não preenche por segurança
+  }
+  new bootstrap.Modal(document.getElementById('blocoModal')).show();
+}
+
+function adicionarOuEditarBloco() {
+  const tipo = document.getElementById('tipoBloco').value;
+  const index = document.getElementById('editIndex').value;
+  let bloco = { tipo, conteudo: '', arquivo: null };
+  if (tipo === 'texto') bloco.conteudo = document.getElementById('inputTexto').value;
+  if (tipo === 'emoji') bloco.conteudo = document.getElementById('inputEmoji').value;
+  if (tipo === 'arquivo') bloco.arquivo = document.getElementById('inputArquivo').files[0];
+  if (tipo === 'audio') bloco.arquivo = document.getElementById('inputAudio').files[0];
+  if (tipo === 'imagem') bloco.arquivo = document.getElementById('inputImagem').files[0];
+  if (index === '') {
+    blocos.push(bloco);
+  } else {
+    blocos[index] = bloco;
+  }
+  renderBlocos();
+  bootstrap.Modal.getInstance(document.getElementById('blocoModal')).hide();
+}
+
+function renderBlocos() {
+  const lista = document.getElementById('blocosLista');
+  lista.innerHTML = '';
+  blocos.forEach((bloco, i) => {
+    let html = `<div class='card mb-2'><div class='card-body d-flex align-items-center justify-content-between'>`;
+    html += `<div><strong>${bloco.tipo.toUpperCase()}</strong> `;
+    if (bloco.tipo === 'texto' || bloco.tipo === 'emoji') html += `<span>${bloco.conteudo}</span>`;
+    if (bloco.tipo === 'arquivo' || bloco.tipo === 'audio' || bloco.tipo === 'imagem') html += bloco.arquivo ? `<span class='text-muted'>${bloco.arquivo.name}</span>` : '';
+    html += `</div><div>`;
+    html += `<button class='btn btn-sm btn-outline-secondary me-1' onclick='showBlockType("${bloco.tipo}",${i})'>Editar</button>`;
+    html += `<button class='btn btn-sm btn-outline-danger me-1' onclick='removerBloco(${i})'>Remover</button>`;
+    if (i > 0) html += `<button class='btn btn-sm btn-outline-primary me-1' onclick='moverBloco(${i},-1)'>&uarr;</button>`;
+    if (i < blocos.length-1) html += `<button class='btn btn-sm btn-outline-primary' onclick='moverBloco(${i},1)'>&darr;</button>`;
+    html += `</div></div></div>`;
+    lista.innerHTML += html;
+  });
+}
+
+function removerBloco(i) {
+  blocos.splice(i,1);
+  renderBlocos();
+}
+function moverBloco(i,dir) {
+  const novo = i+dir;
+  if (novo < 0 || novo >= blocos.length) return;
+  [blocos[i], blocos[novo]] = [blocos[novo], blocos[i]];
+  renderBlocos();
+}
+function salvarFluxo() {
+  alert('Protótipo: Blocos montados! Veja no console:', blocos);
+  console.log('Blocos:', blocos);
+}
+</script>
+{% endblock %} 

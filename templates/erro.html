@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<div class="container d-flex flex-column align-items-center justify-content-center" style="min-height: 70vh;">
+  <div class="card shadow p-5" style="max-width: 420px; border-radius: 18px;">
+    <div class="text-center mb-4">
+      <img src="{% static 'img/logo.png' %}" alt="Telexta" style="height: 60px; width: auto; margin-bottom: 12px;">
+      <h2 class="fw-bold" style="color: #1976d2;">
+        {% if codigo == 404 %}404 - Página não encontrada{% else %}Ops! Algo deu errado{% endif %}
+      </h2>
+    </div>
+    <p class="text-center mb-4" style="font-size: 1.15em; color: #444;">
+      {% if mensagem %}{{ mensagem }}{% else %}Ocorreu um erro inesperado.<br>Por favor, tente novamente ou entre em contato com o suporte.{% endif %}<br>
+      <span style="font-size:2.2em;">😥</span>
+    </p>
+    <div class="d-flex justify-content-center">
+      <a href="/" class="btn btn-primary btn-lg" style="border-radius: 8px; min-width: 160px;">Voltar para o início</a>
+    </div>
+  </div>
+</div>
+{% endblock %} 

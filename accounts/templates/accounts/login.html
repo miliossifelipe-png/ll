@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% block content %}
+<style>
+.login-box-custom {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+  max-width: 400px;
+  margin: 60px auto;
+  padding: 24px 24px 20px 24px;
+  text-align: center;
+}
+.login-logo-custom {
+  margin-bottom: 18px;
+  display: flex;
+  justify-content: center;
+}
+.logo-clock {
+  width: 60px;
+  height: 60px;
+  background: #2196f3;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(33,150,243,0.12);
+}
+.logo-clock-inner {
+  width: 38px;
+  height: 38px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.logo-clock-hour {
+  width: 3px;
+  height: 13px;
+  background: #2196f3;
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  border-radius: 2px;
+}
+.logo-clock-minute {
+  width: 13px;
+  height: 3px;
+  background: #2196f3;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border-radius: 2px;
+}
+.login-title-custom {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #1a2947;
+  margin-bottom: 0.5rem;
+}
+.login-subtitle-custom {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1a2947;
+  margin-bottom: 1.5rem;
+}
+.login-form-custom .form-control {
+  border-radius: 10px;
+  font-size: 1.1rem;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+.login-btn-custom {
+  background: #2196f3;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  padding: 12px 0;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  border: none;
+  width: 100%;
+  transition: background 0.2s;
+}
+.login-btn-custom:hover {
+  background: #1769aa;
+}
+.login-link {
+  color: #2196f3;
+  text-decoration: none;
+  font-weight: 500;
+}
+.login-link:hover {
+  text-decoration: underline;
+}
+</style>
+<div class="login-box-custom">
+  <div class="login-logo-custom" style="margin-bottom: 28px; display: flex; justify-content: center;">
+    <img src="{% static 'img/logo.png' %}" alt="Logo" style="max-width: 54%; height: auto; background: #fff; object-fit: contain;" />
+  </div>
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger" style="font-size:1.05rem; padding:8px 12px; margin-bottom:18px;">
+      Usuário ou senha inválido.
+    </div>
+  {% endif %}
+  <div class="login-subtitle-custom">Faça login</div>
+  <form method="post" class="login-form-custom">
+    {% csrf_token %}
+    <input type="email" name="email" class="form-control" placeholder="E-mail" required autofocus>
+    <input type="password" name="password" class="form-control" placeholder="Senha" required>
+    <div class="d-flex justify-content-end mb-2">
+      <a href="#" class="login-link" style="font-size:0.98rem;">Esqueceu a senha?</a>
+    </div>
+    <button type="submit" class="login-btn-custom">Entrar</button>
+  </form>
+</div>
+{% endblock %} 

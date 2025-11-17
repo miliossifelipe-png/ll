@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5" style="max-width: 700px;">
+  <div class="card p-4">
+    <h4>Confirmação de Exclusão em Lote</h4>
+    <p>Tem certeza que deseja excluir as seguintes mensagens agendadas?</p>
+    <ul>
+      {% for msg in mensagens %}
+        <li><strong>{{ msg.titulo }}</strong> (Canal: {{ msg.canal }})</li>
+      {% endfor %}
+    </ul>
+    <form method="post">{% csrf_token %}
+      {% for id in ids %}
+        <input type="hidden" name="ids" value="{{ id }}">
+      {% endfor %}
+      <button type="submit" name="confirm" class="btn btn-danger">Sim, excluir selecionadas</button>
+      <a href="{% url 'scheduled_message_list' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %} 

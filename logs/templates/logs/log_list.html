@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5" style="max-width: 1200px;">
+  <h2 class="mb-4">Logs de Envio de Mensagens</h2>
+  <form method="get" class="row g-2 mb-3 align-items-end">
+    <div class="col-md-3">
+      <label for="filtro-tipo" class="form-label">Tipo</label>
+      <select id="filtro-tipo" name="tipo" class="form-select">
+        <option value="">Todos</option>
+        <option value="info" {% if tipo == 'info' %}selected{% endif %}>Sucesso</option>
+        <option value="erro" {% if tipo == 'erro' %}selected{% endif %}>Erro</option>
+        <option value="warning" {% if tipo == 'warning' %}selected{% endif %}>Aviso</option>
+      </select>
+    </div>
+    <div class="col-md-5">
+      <label for="filtro-busca" class="form-label">Buscar</label>
+      <input type="text" id="filtro-busca" name="q" class="form-control" placeholder="Mensagem, detalhes..." value="{{ busca }}">
+    </div>
+    <div class="col-md-2 mt-2 d-flex align-items-end">
+      <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+    </div>
+  </form>
+  {% include 'logs/_log_table.html' %}
+</div>
+{% endblock %} 

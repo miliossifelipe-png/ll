@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% block content %}
+<style>
+.channel-box-custom {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+  max-width: 400px;
+  margin: 60px auto;
+  padding: 24px 24px 20px 24px;
+  text-align: center;
+}
+.channel-logo-custom {
+  margin-bottom: 28px;
+  display: flex;
+  justify-content: center;
+}
+.channel-form-custom .form-control {
+  border-radius: 10px;
+  font-size: 1.1rem;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+.channel-btn-custom {
+  background: #1976d2;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 10px;
+  font-size: 1.1rem;
+  padding: 12px 0;
+  margin-top: 10px;
+  margin-bottom: 10px;
+  border: none;
+  width: 100%;
+  transition: background 0.2s;
+}
+.channel-btn-custom:hover {
+  background: #1769aa;
+}
+.channel-form-custom label {
+  display: block;
+  text-align: left;
+  font-weight: 500;
+  color: #1a2947;
+  margin-bottom: 6px;
+  margin-top: 8px;
+}
+</style>
+<div class="channel-box-custom">
+  <div class="channel-logo-custom">
+    <img src="{% static 'img/logo.png' %}" alt="Logo" style="max-width: 54%; height: auto; background: #fff; object-fit: contain;" />
+  </div>
+  <div style="font-size: 1.5rem; font-weight: 600; color: #1a2947; margin-bottom: 1.5rem;">Novo Canal</div>
+  <div style="font-size: 1.08rem; color: #444; margin-bottom: 22px;">Cadastre um novo canal do Telegram preenchendo os campos abaixo.</div>
+  <form method="post" class="channel-form-custom">
+    {% csrf_token %}
+    {{ form|crispy }}
+    <button type="submit" class="channel-btn-custom">Salvar</button>
+  </form>
+</div>
+{% endblock %} 

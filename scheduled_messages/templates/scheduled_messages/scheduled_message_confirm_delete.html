@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5" style="max-width: 600px;">
+  <div class="card p-4">
+    <h4>Confirmar deleção</h4>
+    <p>Tem certeza que deseja deletar a mensagem <strong>{{ mensagem.titulo }}</strong> do canal <strong>{{ mensagem.canal }}</strong>?</p>
+    <form method="post">{% csrf_token %}
+      <button type="submit" class="btn btn-danger">Sim, deletar</button>
+      <a href="{% url 'scheduled_message_list' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %} 

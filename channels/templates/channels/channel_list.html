@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+  <h3>Meus Canais</h3>
+  <a href="{% url 'channel_create' %}" class="btn btn-success mb-3">+ Novo Canal</a>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>ID Telegram</th>
+        <th>Conexão</th>
+        <th>Criado em</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for canal in canais %}
+      <tr>
+        <td>{{ canal.nome }}</td>
+        <td>{{ canal.id_telegram }}</td>
+        <td>
+          {% with status=canal.get_status_conexao %}
+            {% if status.0 %}
+              <span class="badge bg-success">OK</span>
+            {% else %}
+              <span class="badge bg-danger" title="{{ status.1 }}">Falha</span>
+            {% endif %}
+          {% endwith %}
+        </td>
+        <td>{{ canal.criado_em|date:'d/m/Y H:i' }}</td>
+        <td>
+          <a href="{% url 'channel_edit' canal.pk %}" class="btn btn-sm btn-primary">Editar</a>
+          <a href="{% url 'channel_delete' canal.pk %}" class="btn btn-sm btn-danger ms-1">Deletar</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">Nenhum canal cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <a href="/" class="btn btn-secondary">Voltar</a>
+</div>
+{% endblock %} 

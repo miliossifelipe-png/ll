@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5" style="max-width: 700px;">
+  <h2 class="mb-4">Confirmar Exclusão de Rascunhos</h2>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="confirm" value="1">
+    {% for uuid in uuids %}
+      <input type="hidden" name="uuids" value="{{ uuid }}">
+    {% endfor %}
+    <div class="alert alert-warning">
+      <b>Atenção:</b> Esta ação irá excluir <b>{{ drafts|length }}</b> rascunho(s) e todos os arquivos vinculados a eles. Esta ação não pode ser desfeita!
+    </div>
+    <ul class="list-group mb-3">
+      {% for draft in drafts %}
+      <li class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+        <div>
+          <b>{{ draft.dados.titulo|default:'(Sem título)' }}</b>
+          <span class="badge bg-info text-dark ms-2">{{ draft.status|capfirst }}</span>
+        </div>
+        <div class="text-muted small">Última edição: {{ draft.atualizado_em|date:'d/m/Y H:i' }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    <button type="submit" class="btn btn-danger">Excluir Rascunhos Selecionados</button>
+    <a href="{% url 'scheduled_message_list' %}#tab-rascunhos-pane" class="btn btn-secondary ms-2">Cancelar</a>
+  </form>
+</div>
+{% endblock %} 

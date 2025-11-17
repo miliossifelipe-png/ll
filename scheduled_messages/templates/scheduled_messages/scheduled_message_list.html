@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<style>
+.table-responsive {
+  max-height: 300px;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 0;
+  margin: 0;
+}
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #1976d2;
+  color: #fff;
+  box-shadow: 0 2px 2px -1px rgba(0,0,0,0.04);
+}
+.table td.text-break {
+  white-space: normal;
+  word-break: break-word;
+}
+</style>
+<div class="container-fluid mt-5" style="max-width: 1600px;">
+  <h2 class="mb-4">Minhas Mensagens</h2>
+  <ul class="nav nav-tabs mb-3" id="mensagensTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-mensagens" data-bs-toggle="tab" data-bs-target="#tab-mensagens-pane" type="button" role="tab" aria-controls="tab-mensagens-pane" aria-selected="true">Mensagens</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-rascunhos" data-bs-toggle="tab" data-bs-target="#tab-rascunhos-pane" type="button" role="tab" aria-controls="tab-rascunhos-pane" aria-selected="false">Rascunhos</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <a class="nav-link" id="tab-logs" href="/logs/" role="tab" aria-controls="tab-logs" aria-selected="false">Logs</a>
+    </li>
+  </ul>
+  <div class="tab-content" id="mensagensTabsContent">
+    <div class="tab-pane fade show active" id="tab-mensagens-pane" role="tabpanel" aria-labelledby="tab-mensagens">
+      <a href="{% url 'novo_draft' %}" class="btn btn-success mb-3" id="btn-nova-mensagem">Nova Mensagem</a>
+      <form method="get" class="row g-2 mb-3 align-items-end">
+        <div class="col-md-2">
+          <label for="filtro-titulo" class="form-label">Título</label>
+          <input type="text" id="filtro-titulo" name="titulo" class="form-control" placeholder="Título" value="{{ request.GET.titulo }}">
+        </div>
+        <div class="col-md-2">
+          <label for="filtro-status" class="form-label">Status</label>
+          <select id="filtro-status" name="status" class="form-select">
+            <option value="">Status</option>
+            <option value="pendente" {% if request.GET.status == 'pendente' %}selected{% endif %}>Pendente</option>
+            <option value="enviada" {% if request.GET.status == 'enviada' %}selected{% endif %}>Enviada</option>
+            <option value="recorrente" {% if request.GET.status == 'recorrente' %}selected{% endif %}>Recorrente</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="filtro-canal" class="form-label">Canal</label>
+          <select id="filtro-canal" name="canal" class="form-select">
+            <option value="">Canal</option>
+            {% for canal in canais %}
+              <option value="{{ canal.id }}" {% if request.GET.canal == canal.id|stringformat:'s' %}selected{% endif %}>{{ canal.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label for="filtro-agendado" class="form-label">Agendado para</label>
+          <input type="date" id="filtro-agendado" name="agendado_para" class="form-control" value="{{ request.GET.agendado_para }}" placeholder="Agendado para">
+        </div>
+        <div class="col-md-2">
+          <label for="filtro-ultima-execucao" class="form-label">Última Execução</label>
+          <input type="date" id="filtro-ultima-execucao" name="ultima_execucao" class="form-control" value="{{ request.GET.ultima_execucao }}" placeholder="Última Execução">
+        </div>
+        <div class="col-md-2">
+          <label for="filtro-falha" class="form-label">Falha</label>
+          <select id="filtro-falha" name="falha" class="form-select">
+            <option value="">Falha</option>
+            <option value="sim" {% if request.GET.falha == 'sim' %}selected{% endif %}>Com falha</option>
+            <option value="nao" {% if request.GET.falha == 'nao' %}selected{% endif %}>Sem falha</option>
+          </select>
+        </div>
+        <div class="col-md-2 mt-2 d-flex align-items-end">
+          <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+        </div>
+      </form>
+      <form method="post" id="form-multidelete" action="{% url 'scheduled_message_bulk_delete' %}">
+        {% csrf_token %}
+        <div class="d-flex justify-content-end mb-2">
+          <button type="submit" id="btn-excluir-selecionadas" class="btn btn-danger disabled" disabled style="opacity:0.6; pointer-events:none; transition:opacity 0.2s;">
+            Excluir Selecionadas
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover align-middle" style="min-width: 1200px; width: 100%; font-size: 0.88em;">
+            <thead class="table-light" style="font-size: 0.95em;">
+              <tr>
+                <th style="width:32px;"><input type="checkbox" id="select-all"></th>
+                <th style="min-width: 140px;">Título</th>
+                <th style="min-width: 100px;">Canal</th>
+                <th style="min-width: 100px;">Criado por</th>
+                <th style="min-width: 70px;">Tipo</th>
+                <th style="min-width: 110px;">Agendado para</th>
+                <th style="min-width: 110px;">Última Execução</th>
+                <th style="min-width: 80px;">Status</th>
+                <th style="min-width: 120px;">Status do Formulário</th>
+                <th style="min-width: 70px;">Falha</th>
+                <th style="min-width: 120px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for msg in page_obj %}
+              <tr id="msg-{{ msg.uuid }}">
+                <td><input type="checkbox" name="ids" value="{{ msg.id }}"></td>
+                <td class="text-break" style="max-width: 160px;">{{ msg.titulo }}</td>
+                <td>{{ msg.canal }}</td>
+                <td>{{ msg.criado_por.get_full_name|default:msg.criado_por.username }}</td>
+                <td>{{ msg.get_tipo_display }}</td>
+                <td>
+                  {% if msg.tipo == 'unico' %}{{ msg.agendado_para|date:'d/m/Y H:i' }}{% else %}Recorrente{% endif %}
+                </td>
+                <td>
+                  {% if msg.tipo == 'unico' %}
+                    {% if msg.enviado_em %}{{ msg.enviado_em|date:'d/m/Y H:i' }}{% else %}-{% endif %}
+                  {% else %}
+                    {% with ocorrencias=msg.ocorrencias.all|dictsortreversed:'enviado_em' %}
+                      {% if ocorrencias %}{{ ocorrencias.0.enviado_em|date:'d/m/Y H:i' }}{% else %}-{% endif %}
+                    {% endwith %}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if msg.tipo == 'recorrente' %}
+                    <span class="badge bg-info text-dark">Recorrente</span>
+                  {% elif msg.enviado %}
+                    <span class="badge bg-success">Enviada</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark">Pendente</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="form-status-label" id="form-status-{{ msg.uuid }}">-</span>
+                </td>
+                <td>
+                  {% if msg.erro_ultimo_envio %}
+                    <span class="badge bg-danger" title="{{ msg.erro_ultimo_envio }}">Falha</span>
+                  {% else %}-{% endif %}
+                </td>
+                <td>
+                  <div class="d-flex flex-wrap gap-1">
+                    <a href="{% url 'scheduled_message_edit' msg.pk %}" class="btn btn-sm btn-primary" title="Editar">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                    <a href="{% url 'scheduled_message_delete' msg.pk %}" class="btn btn-sm btn-danger" title="Deletar">
+                      <i class="bi bi-trash"></i>
+                    </a>
+                    <a href="{% url 'scheduled_message_testar' msg.pk %}" class="btn btn-sm btn-warning" title="Testar envio">
+                      <i class="bi bi-send"></i>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="11" class="text-center">Nenhuma mensagem agendada.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <nav aria-label="Paginação de mensagens" class="mt-2">
+          <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+              <li class="page-item"><a class="page-link" href="?{% if request.GET.titulo %}titulo={{ request.GET.titulo }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.canal %}canal={{ request.GET.canal }}&{% endif %}{% if request.GET.agendado_para %}agendado_para={{ request.GET.agendado_para }}&{% endif %}{% if request.GET.ultima_execucao %}ultima_execucao={{ request.GET.ultima_execucao }}&{% endif %}{% if request.GET.falha %}falha={{ request.GET.falha }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a></li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}
+              <li class="page-item"><a class="page-link" href="?{% if request.GET.titulo %}titulo={{ request.GET.titulo }}&{% endif %}{% if request.GET.status %}status={{ request.GET.status }}&{% endif %}{% if request.GET.canal %}canal={{ request.GET.canal }}&{% endif %}{% if request.GET.agendado_para %}agendado_para={{ request.GET.agendado_para }}&{% endif %}{% if request.GET.ultima_execucao %}ultima_execucao={{ request.GET.ultima_execucao }}&{% endif %}{% if request.GET.falha %}falha={{ request.GET.falha }}&{% endif %}page={{ page_obj.next_page_number }}">Próxima</a></li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link">Próxima</span></li>
+            {% endif %}
+          </ul>
+        </nav>
+        <div class="text-center text-muted small mt-2">Total de mensagens: {{ total_mensagens }}</div>
+      </form>
+    </div>
+    <div class="tab-pane fade" id="tab-rascunhos-pane" role="tabpanel" aria-labelledby="tab-rascunhos">
+      <form method="post" id="form-multidelete-rascunhos" action="{% url 'draftmessage_bulk_delete' %}">
+        {% csrf_token %}
+        <div class="d-flex justify-content-end mb-2">
+          <button type="submit" id="btn-excluir-rascunhos-selecionados" class="btn btn-danger disabled" disabled style="opacity:0.6; pointer-events:none; transition:opacity 0.2s;">
+            Excluir Selecionados
+          </button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover align-middle" style="min-width: 700px; font-size: 0.89em;">
+            <thead class="table-light" style="font-size: 0.95em;">
+              <tr>
+                <th style="width:32px;"><input type="checkbox" id="select-all-rascunhos"></th>
+                <th style="min-width: 140px;">Título</th>
+                <th style="min-width: 120px;">Status</th>
+                <th style="min-width: 160px;">Última edição</th>
+                <th style="min-width: 120px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for draft in rascunhos %}
+              <tr class="table-secondary">
+                <td><input type="checkbox" name="uuids" value="{{ draft.uuid }}"></td>
+                <td class="text-break" style="max-width: 160px;">
+                  <span class="badge bg-secondary">Rascunho</span>
+                  {{ draft.dados.titulo|default:"(Sem título)" }}
+                </td>
+                <td><span class="badge bg-info text-dark">{{ draft.status|capfirst }}</span></td>
+                <td>{{ draft.atualizado_em|date:"d/m/Y H:i" }}</td>
+                <td>
+                  <a href="{% url 'scheduled_message_create' %}?draft={{ draft.uuid }}" class="btn btn-sm btn-primary">Continuar edição</a>
+                  <a href="{% url 'excluir_rascunho' draft.uuid %}" class="btn btn-sm btn-danger ms-1">Excluir</a>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="5" class="text-center">Nenhum rascunho encontrado.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.getElementById('select-all').addEventListener('change', function() {
+  const checkboxes = document.querySelectorAll('input[name="ids"]');
+  for (const cb of checkboxes) cb.checked = this.checked;
+  updateDeleteButton();
+});
+
+const checkboxes = document.querySelectorAll('input[name="ids"]');
+for (const cb of checkboxes) {
+  cb.addEventListener('change', updateDeleteButton);
+}
+
+function updateDeleteButton() {
+  const checkboxes = document.querySelectorAll('input[name="ids"]');
+  const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+  const btn = document.getElementById('btn-excluir-selecionadas');
+  if (anyChecked) {
+    btn.classList.remove('disabled');
+    btn.disabled = false;
+    btn.style.opacity = 1;
+    btn.style.pointerEvents = '';
+  } else {
+    btn.classList.add('disabled');
+    btn.disabled = true;
+    btn.style.opacity = 0.6;
+    btn.style.pointerEvents = 'none';
+  }
+}
+
+document.getElementById('btn-nova-mensagem').addEventListener('click', function() {
+  localStorage.removeItem('blocos_cache');
+});
+
+// Função para atualizar o status do formulário na lista
+function setFormStatus(uuid, status) {
+  const el = document.getElementById('form-status-' + uuid);
+  if (el) el.innerText = status;
+}
+
+function confirmarExclusaoRascunho(form) {
+  return confirm('Tem certeza que deseja excluir este rascunho? Esta ação não pode ser desfeita.');
+}
+
+document.getElementById('select-all-rascunhos').addEventListener('change', function() {
+  const checkboxes = document.querySelectorAll('#form-multidelete-rascunhos input[name="uuids"]');
+  for (const cb of checkboxes) cb.checked = this.checked;
+  updateDeleteButtonRascunhos();
+});
+
+function updateDeleteButtonRascunhos() {
+  const checkboxes = document.querySelectorAll('#form-multidelete-rascunhos input[name="uuids"]:checked');
+  const btn = document.getElementById('btn-excluir-rascunhos-selecionados');
+  if (checkboxes.length > 0) {
+    btn.classList.remove('disabled');
+    btn.disabled = false;
+    btn.style.opacity = 1;
+    btn.style.pointerEvents = 'auto';
+  } else {
+    btn.classList.add('disabled');
+    btn.disabled = true;
+    btn.style.opacity = 0.6;
+    btn.style.pointerEvents = 'none';
+  }
+}
+
+document.querySelectorAll('#form-multidelete-rascunhos input[name="uuids"]').forEach(cb => {
+  cb.addEventListener('change', updateDeleteButtonRascunhos);
+});
+</script>
+{% endblock %} 

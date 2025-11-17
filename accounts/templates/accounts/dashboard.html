@@ -1,0 +1,369 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+  <!-- Cards existentes -->
+  <div class="row g-4 justify-content-center">
+    <div class="col-12 col-md-6 col-lg-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body text-center">
+          <div class="mb-2" style="font-size:2.2rem; color:#1976d2;"><i class="bi bi-chat-dots"></i></div>
+          <h5 class="card-title">Mensagens</h5>
+          <p class="display-6 fw-bold mb-0">{{ total_mensagens }}</p>
+          <div class="text-muted small">Total de mensagens ativas</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6 col-lg-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body text-center">
+          <div class="mb-2" style="font-size:2.2rem; color:#6c757d;"><i class="bi bi-file-earmark-text"></i></div>
+          <h5 class="card-title">Rascunhos</h5>
+          <p class="display-6 fw-bold mb-0">{{ total_rascunhos }}</p>
+          <div class="text-muted small">Total de rascunhos</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6 col-lg-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body text-center">
+          <div class="mb-2" style="font-size:2.2rem; color:#28a745;"><i class="bi bi-calendar-event"></i></div>
+          <h5 class="card-title">Para hoje (Únicas)</h5>
+          <p class="display-6 fw-bold mb-0">{{ total_unicas_hoje }}</p>
+          <div class="text-muted small">Mensagens únicas agendadas para hoje</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6 col-lg-3">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body text-center">
+          <div class="mb-2" style="font-size:2.2rem; color:#fd7e14;"><i class="bi bi-arrow-repeat"></i></div>
+          <h5 class="card-title">Para hoje (Recorrentes)</h5>
+          <p class="display-6 fw-bold mb-0">{{ total_recorrentes_hoje }}</p>
+          <div class="text-muted small">Mensagens recorrentes previstas para hoje</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Filtros -->
+  <div class="row mt-5">
+    <div class="col-12">
+      <form id="dashboard-filtros" class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label for="periodo" class="form-label">Período</label>
+          <select id="periodo" class="form-select" name="periodo">
+            <option value="7d">Últimos 7 dias</option>
+            <option value="hoje">Hoje</option>
+            <option value="mes">Mês atual</option>
+            <option value="personalizado">Personalizado</option>
+          </select>
+        </div>
+        <div class="col-md-3" id="filtro-data-personalizada" style="display:none;">
+          <label for="data_inicio" class="form-label">Data início</label>
+          <input type="date" id="data_inicio" name="data_inicio" class="form-control">
+          <label for="data_fim" class="form-label mt-1">Data fim</label>
+          <input type="date" id="data_fim" name="data_fim" class="form-control">
+        </div>
+        <div class="col-md-3">
+          <label for="canal" class="form-label">Canal</label>
+          <select id="canal" class="form-select" name="canal">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="tipo" class="form-label">Tipo</label>
+          <select id="tipo" class="form-select" name="tipo">
+            <option value="">Todos</option>
+            <option value="unico">Único</option>
+            <option value="recorrente">Recorrente</option>
+          </select>
+        </div>
+        {% if user.is_staff or user.is_superuser %}
+        <div class="col-md-3">
+          <label for="usuario" class="form-label">Usuário</label>
+          <select id="usuario" class="form-select" name="usuario">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        {% endif %}
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <!-- Gráficos -->
+  <div class="row mt-4 g-4">
+    <div class="col-12 col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="card-title text-center mb-3">Mensagens disparadas por dia</h6>
+          <div class="chart-container" style="position:relative; height:260px; width:100%">
+            <canvas id="grafico-por-dia"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="card-title text-center mb-3">Mensagens por usuário</h6>
+          <div class="chart-container" style="position:relative; height:260px; width:100%">
+            <canvas id="grafico-por-usuario"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="card-title text-center mb-3">Top 5 usuários</h6>
+          <div class="chart-container" style="position:relative; height:260px; width:100%">
+            <canvas id="grafico-top-usuarios"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="card-title text-center mb-3">Mensagens por canal</h6>
+          <div class="chart-container" style="position:relative; height:260px; width:100%">
+            <canvas id="grafico-por-canal"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h6 class="card-title text-center mb-3">Mensagens por tipo</h6>
+          <div class="chart-container" style="position:relative; height:260px; width:100%">
+            <canvas id="grafico-por-tipo"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Remover os gráficos de erros -->
+  <!-- Adicionar tabela de logs -->
+  <div class="row mt-5">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title mb-3 text-center">Logs de Envio de Mensagens</h5>
+          {% include 'logs/_log_table.html' %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+.chart-container { min-width: 0; }
+@media (max-width: 767px) {
+  .chart-container { height: 200px !important; }
+}
+</style>
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script>
+// Utilidades para popular selects
+async function popularCanais() {
+  const resp = await axios.get('/mensagens/canais/');
+  const canais = resp.data;
+  const select = document.getElementById('canal');
+  canais.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.nome;
+    select.appendChild(opt);
+  });
+}
+async function popularUsuarios() {
+  const resp = await axios.get('/accounts/usuarios/');
+  const usuarios = resp.data;
+  const select = document.getElementById('usuario');
+  usuarios.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.username;
+    select.appendChild(opt);
+  });
+}
+// Mostrar/ocultar datas personalizadas
+const periodoSelect = document.getElementById('periodo');
+periodoSelect.addEventListener('change', function() {
+  document.getElementById('filtro-data-personalizada').style.display = this.value === 'personalizado' ? '' : 'none';
+});
+function exibirAviso(canvasId, msg) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.font = '16px Arial';
+  ctx.fillStyle = '#888';
+  ctx.textAlign = 'center';
+  ctx.fillText(msg, canvas.width/2, canvas.height/2);
+}
+// Adicionar titles nos gráficos Chart.js
+function getChartOptions(title) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      title: {
+        display: false, // Título já está no card
+        text: title,
+        font: { size: 16 }
+      }
+    },
+    layout: { padding: 10 }
+  };
+}
+// Função para buscar e renderizar os gráficos
+async function atualizarGraficos() {
+  const form = document.getElementById('dashboard-filtros');
+  const params = new URLSearchParams(new FormData(form)).toString();
+  const resp = await axios.get(`/dashboard/data/?${params}`);
+  const dados = resp.data;
+  // Gráfico por dia
+  if (!dados.por_dia.length) {
+    exibirAviso('grafico-por-dia', 'Sem dados para o período/filtro selecionado');
+  } else {
+    const ctxDia = document.getElementById('grafico-por-dia').getContext('2d');
+    if(window.graficoDia) window.graficoDia.destroy();
+    window.graficoDia = new Chart(ctxDia, {
+      type: 'bar',
+      data: {
+        labels: dados.por_dia.map(d => d.data_envio__date),
+        datasets: [{ label: 'Mensagens disparadas', data: dados.por_dia.map(d => d.qtd), backgroundColor: '#1976d2' }]
+      },
+      options: getChartOptions('Mensagens disparadas por dia')
+    });
+  }
+  // Gráfico por usuário
+  if (!dados.por_usuario.length) {
+    exibirAviso('grafico-por-usuario', 'Sem dados para o período/filtro selecionado');
+  } else {
+    const ctxUsuario = document.getElementById('grafico-por-usuario').getContext('2d');
+    if(window.graficoUsuario) window.graficoUsuario.destroy();
+    window.graficoUsuario = new Chart(ctxUsuario, {
+      type: 'bar',
+      data: {
+        labels: dados.por_usuario.map(d => d.criado_por__username),
+        datasets: [{ label: 'Mensagens por usuário', data: dados.por_usuario.map(d => d.qtd), backgroundColor: '#28a745' }]
+      },
+      options: getChartOptions('Mensagens por usuário')
+    });
+  }
+  // Gráfico top usuários
+  if (!dados.top_usuarios.length) {
+    exibirAviso('grafico-top-usuarios', 'Sem dados para o período/filtro selecionado');
+  } else {
+    const ctxTop = document.getElementById('grafico-top-usuarios').getContext('2d');
+    if(window.graficoTop) window.graficoTop.destroy();
+    window.graficoTop = new Chart(ctxTop, {
+      type: 'bar',
+      data: {
+        labels: dados.top_usuarios.map(d => d.criado_por__username),
+        datasets: [{ label: 'Top 5 usuários', data: dados.top_usuarios.map(d => d.qtd), backgroundColor: '#fd7e14' }]
+      },
+      options: getChartOptions('Top 5 usuários')
+    });
+  }
+  // Gráfico por canal
+  if (!dados.por_canal.length) {
+    exibirAviso('grafico-por-canal', 'Sem dados para o período/filtro selecionado');
+  } else {
+    const ctxCanal = document.getElementById('grafico-por-canal').getContext('2d');
+    if(window.graficoCanal) window.graficoCanal.destroy();
+    window.graficoCanal = new Chart(ctxCanal, {
+      type: 'pie',
+      data: {
+        labels: dados.por_canal.map(d => d.canal__nome),
+        datasets: [{ label: 'Por canal', data: dados.por_canal.map(d => d.qtd), backgroundColor: ['#1976d2','#28a745','#fd7e14','#6c757d','#dc3545'] }]
+      },
+      options: getChartOptions('Mensagens por canal')
+    });
+  }
+  // Gráfico por tipo
+  if (!dados.por_tipo.length) {
+    exibirAviso('grafico-por-tipo', 'Sem dados para o período/filtro selecionado');
+  } else {
+    const ctxTipo = document.getElementById('grafico-por-tipo').getContext('2d');
+    if(window.graficoTipo) window.graficoTipo.destroy();
+    window.graficoTipo = new Chart(ctxTipo, {
+      type: 'pie',
+      data: {
+        labels: dados.por_tipo.map(d => d.tipo),
+        datasets: [{ label: 'Por tipo', data: dados.por_tipo.map(d => d.qtd), backgroundColor: ['#1976d2','#fd7e14'] }]
+      },
+      options: getChartOptions('Mensagens por tipo')
+    });
+  }
+}
+async function atualizarGraficosLogs() {
+  const params = new URLSearchParams(new FormData(document.getElementById('dashboard-filtros'))).toString();
+  const resp = await axios.get(`/dashboard/logs_data/?${params}`);
+  const dados = resp.data;
+  // Erros por dia
+  if (!dados.por_dia.length) {
+    exibirAviso('grafico-erros-por-dia', 'Sem erros para o período/filtro selecionado');
+  } else {
+    const ctx = document.getElementById('grafico-erros-por-dia').getContext('2d');
+    if(window.graficoErrosDia) window.graficoErrosDia.destroy();
+    window.graficoErrosDia = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: dados.por_dia.map(d => d.criado_em__date),
+        datasets: [{ label: 'Erros', data: dados.por_dia.map(d => d.qtd), backgroundColor: '#dc3545' }]
+      },
+      options: getChartOptions('Erros por dia')
+    });
+  }
+  // Erros por mensagem
+  if (!dados.por_mensagem.length) {
+    exibirAviso('grafico-erros-por-mensagem', 'Sem erros para o período/filtro selecionado');
+  } else {
+    const ctx = document.getElementById('grafico-erros-por-mensagem').getContext('2d');
+    if(window.graficoErrosMsg) window.graficoErrosMsg.destroy();
+    window.graficoErrosMsg = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: dados.por_mensagem.map(d => d.mensagem),
+        datasets: [{ label: 'Erros', data: dados.por_mensagem.map(d => d.qtd), backgroundColor: '#fd7e14' }]
+      },
+      options: getChartOptions('Top mensagens com erro')
+    });
+  }
+  // Erros por tipo
+  if (!dados.por_tipo.length) {
+    exibirAviso('grafico-erros-por-tipo', 'Sem erros para o período/filtro selecionado');
+  } else {
+    const ctx = document.getElementById('grafico-erros-por-tipo').getContext('2d');
+    if(window.graficoErrosTipo) window.graficoErrosTipo.destroy();
+    window.graficoErrosTipo = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: dados.por_tipo.map(d => d.tipo),
+        datasets: [{ label: 'Erros', data: dados.por_tipo.map(d => d.qtd), backgroundColor: ['#dc3545','#fd7e14','#6c757d'] }]
+      },
+      options: getChartOptions('Erros por tipo')
+    });
+  }
+}
+// Submissão do filtro
+const form = document.getElementById('dashboard-filtros');
+form.addEventListener('submit', function(e) {
+  e.preventDefault();
+  atualizarGraficos();
+});
+// Inicialização
+window.addEventListener('DOMContentLoaded', async function() {
+  await popularCanais();
+  {% if user.is_staff or user.is_superuser %} await popularUsuarios(); {% endif %}
+  atualizarGraficos();
+});
+</script>
+{% endblock %} 

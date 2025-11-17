@@ -1,0 +1,973 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block content %}
+<script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
+<div class="container mt-5" style="max-width: 900px;">
+  <h2 class="mb-4">{{ mensagem.titulo|default:'Nova Mensagem Agendada' }}</h2>
+  <form method="post" enctype="multipart/form-data" id="msgForm">
+    {% csrf_token %}
+    <input type="hidden" name="blocos_json" id="blocos_json">
+    <div class="row">
+      <div class="col-12 mb-4">
+        {{ form.titulo|as_crispy_field }}
+        {{ form.canal|as_crispy_field }}
+      </div>
+      <div class="col-12 mb-4">
+        <label class="form-label">Blocos da Mensagem</label>
+        <div class="mb-2">
+          <button type="button" class="btn btn-outline-primary me-2" onclick="addBlock('texto')"><i class="bi bi-fonts"></i> Adicionar Texto</button>
+          <button type="button" class="btn btn-outline-primary me-2" onclick="addBlock('arquivo')"><i class="bi bi-paperclip"></i> Adicionar Arquivo</button>
+          <button type="button" class="btn btn-outline-primary me-2" onclick="addBlock('video')"><i class="bi bi-camera-video"></i> Adicionar Vídeo</button>
+          <button type="button" class="btn btn-outline-primary me-2" onclick="addBlock('audio')"><i class="bi bi-mic"></i> Adicionar Áudio</button>
+          <button type="button" class="btn btn-outline-primary me-2" onclick="addBlock('inline_keyboard')"><i class="bi bi-ui-checks"></i> Adicionar Botões</button>
+        </div>
+        <div id="blocosLista"></div>
+      </div>
+      <div class="col-12 mb-4">
+        <div class="card p-3">
+          <h5>Agendamento</h5>
+          {{ form.tipo|as_crispy_field }}
+          <div id="agendamento-unico">
+            {{ form.agendado_para|as_crispy_field }}
+          </div>
+          <div id="agendamento-recorrente" style="display:none;">
+            {{ form.dias_semana|as_crispy_field }}
+            {{ form.horario|as_crispy_field }}
+            {{ form.data_inicio|as_crispy_field }}
+            {{ form.data_fim|as_crispy_field }}
+          </div>
+        </div>
+      </div>
+      <div class="col-12 mb-4">
+        <button type="submit" class="btn btn-success">Salvar Mensagem</button>
+        <a href="{% url 'scheduled_message_list' %}" class="btn btn-secondary ms-2">Cancelar</a>
+      </div>
+    </div>
+  </form>
+</div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+{% if blocos %}
+{{ blocos|json_script:'blocos_backend' }}
+{% endif %}
+<div id="loadingOverlay" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(255,255,255,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;">
+  <div class="spinner-border text-primary" style="width:4rem;height:4rem;" role="status">
+    <span class="visually-hidden">Carregando...</span>
+  </div>
+  <div class="mt-3" style="font-size:1.2rem;color:#2196f3;">Carregando blocos...</div>
+</div>
+<style>
+.upload-area-custom {
+  border: 2px dashed #bcd0e5;
+  border-radius: 12px;
+  background: #f5faff;
+  padding: 32px 12px 18px 12px;
+  text-align: center;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.upload-area-custom:hover {
+  border-color: #2196f3;
+}
+.upload-area-icon {
+  font-size: 2.5rem;
+  color: #bcd0e5;
+  margin-bottom: 8px;
+}
+.upload-caption-input {
+  margin-top: 8px;
+}
+.bloco-arquivo-preview-area {
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e0e7ef;
+  margin-bottom: 8px;
+}
+.bloco-preview-col img, .bloco-preview-col video {
+  max-width: 220px;
+  max-height: 180px;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px #0002;
+}
+.bloco-info-col textarea {
+  min-height: 48px;
+}
+.bloco-acoes-row .btn {
+  min-width: 110px;
+}
+@media (max-width: 600px) {
+  .bloco-arquivo-preview-area .col-auto, .bloco-arquivo-preview-area .col {
+    flex: 0 0 100%;
+    max-width: 100%;
+    text-align: center;
+  }
+  .bloco-preview-col img, .bloco-preview-col video {
+    max-width: 100%;
+    max-height: 180px;
+  }
+}
+.bloco-loading-overlay { transition: opacity 0.2s; }
+.bloco-inline-keyboard-row { display: flex; flex-wrap: wrap; gap: 18px; }
+.bloco-inline-keyboard-col { flex: 1 1 320px; min-width: 260px; }
+@media (max-width: 900px) {
+  .bloco-inline-keyboard-row { flex-direction: column; gap: 8px; }
+}
+</style>
+<script id="edicao_mensagem_pk" type="application/json">{{ mensagem.pk|default:'null' }}</script>
+<script>
+var IS_EDICAO_MENSAGEM = JSON.parse(document.getElementById('edicao_mensagem_pk').textContent);
+const UPLOAD_URL = "{% url 'ajax_upload_block_file' %}";
+let blocos = [];
+let blocoIdCounter = 0;
+let captionEditors = {};
+
+let draftUUID = null;
+
+// Função para gerar UUID v4 compatível com todos os navegadores
+function gerarUUID() {
+  if (window.crypto && window.crypto.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  // Fallback para navegadores antigos
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// Ao criar nova mensagem, draftUUID só é obtido da URL
+function inicializarDraft() {
+  // Se já existe um UUID salvo na URL, use ele
+  const urlParams = new URLSearchParams(window.location.search);
+  draftUUID = urlParams.get('draft') || null;
+  if (draftUUID) {
+    // Buscar rascunho do backend
+    fetch('/mensagens/api/draft/?uuid=' + draftUUID, {credentials: 'same-origin'})
+      .then(r => {
+        if (r.status === 404) return null;
+        if (!r.ok) throw new Error('Erro ao buscar draft');
+        return r.json();
+      })
+      .then(data => {
+        if (data && data.dados) {
+          // Restaurar blocos do rascunho, garantindo campos essenciais
+          blocos = (data.dados.blocos || []).map((b, i) => ({
+            ...b,
+            arquivo_nome: b.arquivo_nome || null,
+            arquivo_nome_original: b.arquivo_nome_original || null,
+            id: typeof b.id === 'number' ? b.id : blocoIdCounter++,
+            uid: b.uid || gerarUUID(),
+            editandoArquivo: false
+          }));
+          blocoIdCounter = blocos.length > 0 ? Math.max(...blocos.map(b => b.id))+1 : 0;
+          // Restaurar campos principais do formulário
+          if (data.dados.titulo !== undefined && document.getElementById('id_titulo')) document.getElementById('id_titulo').value = data.dados.titulo;
+          if (data.dados.canal !== undefined && document.getElementById('id_canal')) document.getElementById('id_canal').value = data.dados.canal;
+          if (data.dados.tipo !== undefined && document.getElementById('id_tipo')) document.getElementById('id_tipo').value = data.dados.tipo;
+          if (data.dados.agendado_para !== undefined && document.getElementById('id_agendado_para')) document.getElementById('id_agendado_para').value = data.dados.agendado_para;
+          if (data.dados.horario !== undefined && document.getElementById('id_horario')) document.getElementById('id_horario').value = data.dados.horario;
+          if (data.dados.data_inicio !== undefined && document.getElementById('id_data_inicio')) document.getElementById('id_data_inicio').value = data.dados.data_inicio;
+          if (data.dados.data_fim !== undefined && document.getElementById('id_data_fim')) document.getElementById('id_data_fim').value = data.dados.data_fim;
+          // Restaurar dias da semana (checkboxes)
+          if (Array.isArray(data.dados.dias_semana)) {
+            document.querySelectorAll('input[name="dias_semana"]').forEach(cb => {
+              cb.checked = data.dados.dias_semana.includes(cb.value);
+            });
+          }
+          toggleAgendamento(); // Garante exibição correta após restaurar draft
+          renderTodosBlocos();
+          atualizarOrdemBlocos();
+        }
+      })
+      .catch(e => {/* ignora erro de draft inexistente */});
+  }
+}
+
+// Salvar/atualizar rascunho no backend
+function salvarDraft() {
+  // Salvar todos os campos do formulário, não só blocos
+  const dados = { blocos };
+  // Campos principais
+  dados.titulo = document.getElementById('id_titulo')?.value || '';
+  dados.canal = document.getElementById('id_canal')?.value || '';
+  dados.tipo = document.getElementById('id_tipo')?.value || '';
+  dados.agendado_para = document.getElementById('id_agendado_para')?.value || '';
+  dados.dias_semana = Array.from(document.querySelectorAll('input[name="dias_semana"]:checked')).map(cb => cb.value);
+  dados.horario = document.getElementById('id_horario')?.value || '';
+  dados.data_inicio = document.getElementById('id_data_inicio')?.value || '';
+  dados.data_fim = document.getElementById('id_data_fim')?.value || '';
+  if (!draftUUID) return; // Nunca cria novo draft, só atualiza
+  fetch('/mensagens/api/draft/', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({uuid: draftUUID, dados})
+  });
+}
+
+function addBlock(tipo) {
+  sincronizarCamposParaBlocos();
+  let bloco = { tipo, conteudo: '', arquivo: null, id: blocoIdCounter++, uid: gerarUUID() };
+  if (tipo === 'inline_keyboard') {
+    bloco.conteudo = '[]';
+  }
+  blocos.push(bloco);
+  if (!IS_EDICAO_MENSAGEM) salvarDraft();
+  renderBloco(bloco, blocos.length - 1);
+  atualizarOrdemBlocos();
+}
+
+function renderBloco(bloco, idx) {
+  const lista = document.getElementById('blocosLista');
+  let div = document.createElement('div');
+  div.className = 'card mb-2 p-3 bloco-item';
+  div.setAttribute('data-field-order', idx);
+  div.setAttribute('data-bloco-id', bloco.id);
+  let html = `<div class='d-flex flex-column flex-md-row align-items-md-center gap-2'>`;
+  let tipoLabel = bloco.tipo === 'inline_keyboard' ? 'Botões de URL' : bloco.tipo;
+  html += `<div class='fw-bold text-capitalize mb-2 mb-md-0' style='min-width:90px;'>${tipoLabel}</div>`;
+  let arquivoSalvoHtml = '';
+  let inputName = `arquivo_${bloco.id}`;
+  if (["arquivo","video","audio","imagem"].includes(bloco.tipo)) {
+    html += `<div class='bloco-arquivo-preview-area row g-2 align-items-center mb-2 p-2' style='background:#f8fafc;border-radius:10px;border:1px solid #e0e7ef;'>`;
+    if (bloco.arquivo_nome && !bloco.editandoArquivo) {
+      let url = `/media/${bloco.arquivo_nome}`;
+      let ext = (bloco.arquivo_nome_original||bloco.arquivo_nome||'').split('.').pop().toLowerCase();
+      let isImg = /^(jpe?g|png|gif|bmp|webp)$/.test(ext);
+      let isVid = /^(mp4|webm|ogg|mov|avi|mkv)$/.test(ext);
+      let isAud = /^(mp3|wav|ogg|aac|flac)$/.test(ext);
+      html += `<div class='col-auto d-flex flex-column align-items-center justify-content-center bloco-preview-col'>`;
+      if (isImg) {
+        html += `<img src='${url}' alt='${bloco.arquivo_nome_original||''}' style='max-width:220px;max-height:180px;display:block;border-radius:12px;box-shadow:0 2px 12px #0002;margin-bottom:12px;'>`;
+      } else if (isVid) {
+        html += `<video src='${url}' controls style='max-width:180px;max-height:120px;display:block;border-radius:10px;box-shadow:0 2px 8px #0001;margin-bottom:12px;'></video>`;
+      } else if (isAud) {
+        html += `<audio src='${url}' controls style='width:180px;display:block;margin-bottom:12px;'></audio>`;
+      }
+      html += `<div class='d-flex flex-row gap-3 mt-2 mb-2 bloco-acoes-row'>`;
+      html += `<a href='${url}' target='_blank' class='btn btn-outline-primary btn-sm' title='Visualizar'><i class='bi bi-eye'></i> Visualizar</a>`;
+      html += `<button type='button' class='btn btn-outline-secondary btn-sm' title='Substituir arquivo' onclick='editarArquivoBloco(${bloco.id})'><i class='bi bi-upload'></i> Substituir</button>`;
+      html += `</div>`;
+      html += `</div>`;
+      html += `<div class='col d-flex flex-column justify-content-center bloco-info-col'>`;
+      html += `<div class='mb-1'><span class='text-success' style='font-size:1em;'>${bloco.arquivo_nome_original||bloco.arquivo_nome}</span></div>`;
+      html += `<textarea id='caption-editor-${bloco.id}' class='form-control upload-caption-input mt-2 mb-2' placeholder='Digite a legenda...'></textarea>`;
+      html += `</div>`;
+    } else {
+      // Input file para upload/substituição
+      let inputFile = document.createElement('input');
+      inputFile.type = 'file';
+      inputFile.className = 'form-control me-2';
+      inputFile.name = inputName;
+      if (bloco.tipo === 'video') inputFile.accept = 'video/*';
+      if (bloco.tipo === 'audio') inputFile.accept = 'audio/*';
+      if (bloco.tipo === 'imagem') inputFile.accept = 'image/*';
+      inputFile.onchange = function() { updateBlocoArquivo(bloco.id, this); };
+      bloco.inputFile = inputFile;
+      html += `<label class='upload-area-custom mb-2'>`;
+      html += `<div class='upload-area-icon'><svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' fill='none' viewBox='0 0 24 24'><path fill='#bcd0e5' d='M12 16a1 1 0 0 1-1-1V8.41l-2.3 2.3a1 1 0 1 1-1.4-1.42l4-4a1 1 0 0 1 1.4 0l4 4a1 1 0 1 1-1.4 1.42L13 8.41V15a1 1 0 0 1-1 1Z'/><path fill='#bcd0e5' d='M20 18a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 1 1 2 0v1h12v-1a1 1 0 1 1 2 0v2Z'/></svg></div>`;
+      html += `<div style='color:#7a8ca3; font-size:1.08rem; font-weight:500;'>Clique para upload</div>`;
+      html += `<span class='input-file-wrapper'></span>`;
+      html += `</label>`;
+      html += `<textarea id='caption-editor-${bloco.id}' class='form-control upload-caption-input mt-2' placeholder='Digite a legenda...'></textarea>`;
+    }
+    html += `</div>`;
+  } else if (bloco.tipo === 'texto') {
+    html += `<textarea id='text-editor-${bloco.id}' class='form-control text-editor-input' rows='2' placeholder='Digite o texto...'></textarea>`;
+  } else if (bloco.tipo === 'inline_keyboard') {
+    let botoes = [];
+    try { botoes = bloco.conteudo ? JSON.parse(bloco.conteudo) : []; } catch(e) { botoes = []; }
+    // Mensagem acima dos botões, ocupando toda a largura
+    html += `<div class='row g-2 align-items-start'>`;
+    html += `<div class='col-12 mb-2'>`;
+    html += `<div class='fw-semibold' style='font-size:1.08rem;'>Mensagem acima dos botões</div>`;
+    html += `<textarea id='caption-editor-${bloco.id}' class='form-control upload-caption-input' placeholder='Digite a mensagem que aparecerá junto aos botões...'></textarea>`;
+    html += `</div>`;
+    html += `<div class='col-12 col-md-8'>`;
+    html += `<div id='botoes-lista-${bloco.id}'>`;
+    botoes.forEach((btn, i) => {
+      html += `<div class='input-group mb-2'>
+        <input type='text' class='form-control' placeholder='Texto do botão' value='${btn.text||''}'>
+        <input type='text' class='form-control' placeholder='URL' value='${btn.url||''}'>
+        <button type='button' class='btn btn-danger' onclick='removerInlineButton(${bloco.id},${i})'><i class='bi bi-x'></i></button>
+      </div>`;
+    });
+    html += `</div>`;
+    html += `<button type='button' class='btn btn-outline-success btn-sm' onclick='adicionarInlineButton(${bloco.id})'><i class='bi bi-plus'></i> Adicionar Botão</button>`;
+    html += `</div>`;
+    html += `</div>`;
+  }
+  html += `<div class='d-flex gap-1 ms-md-auto mt-2 mt-md-0'>`;
+  if (idx > 0) html += `<button type='button' class='btn btn-outline-secondary btn-sm' onclick='moverBloco(${bloco.id},-1)' title='Mover para cima'><i class='bi bi-arrow-up'></i></button>`;
+  if (idx < blocos.length-1) html += `<button type='button' class='btn btn-outline-secondary btn-sm' onclick='moverBloco(${bloco.id},1)' title='Mover para baixo'><i class='bi bi-arrow-down'></i></button>`;
+  html += `<button type='button' class='btn btn-outline-danger btn-sm' onclick='pedirConfirmacaoRemoverBloco(${bloco.id})' title='Remover'><i class='bi bi-x'></i></button>`;
+  html += `</div></div></div>`;
+  div.innerHTML = html;
+  // Reanexa o input file do bloco, se existir (apenas para tipos de arquivo)
+  if (["arquivo", "video", "audio", "imagem"].includes(bloco.tipo) && bloco.inputFile && bloco.inputFile instanceof Node && (!bloco.arquivo_nome || bloco.editandoArquivo)) {
+    const wrapper = div.querySelector('.input-file-wrapper');
+    if (wrapper) wrapper.appendChild(bloco.inputFile);
+  }
+  lista.appendChild(div);
+  // Preencher campos restaurados
+  if (["arquivo", "video", "audio", "imagem"].includes(bloco.tipo)) {
+    setTimeout(() => {
+      const textarea = div.querySelector(`#caption-editor-${bloco.id}`);
+      if (textarea) textarea.value = bloco.caption || '';
+      if (textarea && typeof ClassicEditor !== 'undefined') {
+        ClassicEditor.create(textarea, {
+          toolbar: ['bold', 'italic', 'bulletedList', 'numberedList', 'undo', 'redo', 'link']
+        }).then(editor => {
+          captionEditors[textarea.id] = editor;
+          editor.setData(bloco.caption || '');
+          editor.model.document.on('change:data', () => {
+            updateBlocoCaption(bloco.id, editor.getData());
+          });
+        });
+      }
+    }, 0);
+  } else if (bloco.tipo === 'texto') {
+    setTimeout(() => {
+      const textarea = div.querySelector(`#text-editor-${bloco.id}`);
+      if (textarea && typeof ClassicEditor !== 'undefined') {
+        ClassicEditor.create(textarea, {
+          toolbar: ['bold', 'italic', 'bulletedList', 'numberedList', 'undo', 'redo', 'link']
+        }).then(editor => {
+          captionEditors[textarea.id] = editor;
+          editor.setData(bloco.conteudo || '');
+          editor.model.document.on('change:data', () => {
+            updateBlocoConteudo(bloco.id, editor.getData());
+          });
+        });
+      }
+    }, 0);
+  }
+  if (bloco.tipo === 'inline_keyboard') {
+    setTimeout(() => {
+      const divBloco = document.querySelector(`.bloco-item[data-bloco-id='${bloco.id}']`);
+      if (divBloco) {
+        divBloco.querySelectorAll('#botoes-lista-' + bloco.id + ' .input-group input').forEach((input, i) => {
+          input.addEventListener('input', function() {
+            const campo = i % 2 === 0 ? 'text' : 'url';
+            const btnIdx = Math.floor(i/2);
+            updateInlineButton(bloco.id, btnIdx, campo, input.value);
+          });
+        });
+        // Preencher e ativar CKEditor para mensagem acima dos botões
+        const textarea = divBloco.querySelector(`#caption-editor-${bloco.id}`);
+        if (textarea) textarea.value = bloco.caption || '';
+        if (textarea && typeof ClassicEditor !== 'undefined') {
+          ClassicEditor.create(textarea, {
+            toolbar: ['bold', 'italic', 'bulletedList', 'numberedList', 'undo', 'redo', 'link']
+          }).then(editor => {
+            captionEditors[textarea.id] = editor;
+            editor.setData(bloco.caption || '');
+            editor.model.document.on('change:data', () => {
+              updateBlocoCaption(bloco.id, editor.getData());
+            });
+          });
+        }
+      }
+    }, 0);
+  }
+}
+
+function renderTodosBlocos() {
+  const lista = document.getElementById('blocosLista');
+  lista.innerHTML = '';
+  blocos.forEach((bloco, idx) => renderBloco(bloco, idx));
+}
+
+function updateBlocoConteudo(id, val) {
+  const bloco = blocos.find(b => b.id === id);
+  if (bloco) bloco.conteudo = val;
+  if (!IS_EDICAO_MENSAGEM) salvarDraft();
+}
+function updateBlocoArquivo(id, input) {
+  const bloco = blocos.find(b => b.id === id);
+  if (bloco && input.files && input.files[0]) {
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+    fetch(UPLOAD_URL, {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin'
+    })
+    .then(resp => resp.json())
+    .then(data => {
+      if (data.success) {
+        bloco.arquivo_nome = data.file_name;
+        bloco.arquivo_nome_original = data.original_name;
+        bloco.editandoArquivo = false;
+        renderTodosBlocos();
+        if (!IS_EDICAO_MENSAGEM) salvarDraft();
+      } else {
+        alert('Erro ao enviar arquivo: ' + (data.error || 'Erro desconhecido.'));
+      }
+    })
+    .catch(() => alert('Erro ao enviar arquivo.'));
+  }
+}
+function updateBlocoCaption(id, val) {
+  const bloco = blocos.find(b => b.id === id);
+  if (bloco) bloco.caption = val;
+  if (!IS_EDICAO_MENSAGEM) salvarDraft();
+}
+function excluirArquivoNoServidor(fileName, callback, tentativas=0) {
+  if (!fileName) { if (callback) callback(); return; }
+  fetch('/mensagens/api/excluir-arquivo-bloco/', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({file_name: fileName})
+  })
+  .then(resp => resp.json())
+  .then(data => {
+    if (data.success) {
+      if (callback) callback();
+    } else {
+      if (data.error && data.error.includes('WinError 32') && tentativas < 3) {
+        setTimeout(() => excluirArquivoNoServidor(fileName, callback, tentativas+1), 2000);
+      } else {
+        console.log('Erro ao excluir arquivo: ' + (data.error || 'Erro desconhecido.'));
+        if (callback) callback();
+      }
+    }
+  });
+}
+// Função utilitária para pegar o CSRF token do cookie
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+function mostrarBlocoLoading(id) {
+  const blocoDiv = document.querySelector(`.bloco-item[data-bloco-id='${id}']`);
+  if (!blocoDiv) return;
+  let overlay = blocoDiv.querySelector('.bloco-loading-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.className = 'bloco-loading-overlay';
+    overlay.innerHTML = `<div class='spinner-border text-primary' style='width:2.5rem;height:2.5rem;' role='status'><span class='visually-hidden'>Deletando...</span></div><div style='color:#2196f3;font-size:1rem;margin-top:0.5rem;'>Deletando...</div>`;
+    overlay.style.position = 'absolute';
+    overlay.style.top = 0;
+    overlay.style.left = 0;
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.background = 'rgba(255,255,255,0.85)';
+    overlay.style.display = 'flex';
+    overlay.style.flexDirection = 'column';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.zIndex = 10;
+    blocoDiv.style.position = 'relative';
+    blocoDiv.appendChild(overlay);
+  }
+  // Desabilita botão de remover
+  const btn = blocoDiv.querySelector("button[title='Remover']");
+  if (btn) btn.disabled = true;
+}
+function esconderBlocoLoading(id) {
+  const blocoDiv = document.querySelector(`.bloco-item[data-bloco-id='${id}']`);
+  if (!blocoDiv) return;
+  const overlay = blocoDiv.querySelector('.bloco-loading-overlay');
+  if (overlay) overlay.remove();
+  const btn = blocoDiv.querySelector("button[title='Remover']");
+  if (btn) btn.disabled = false;
+}
+function mostrarGlobalDeleteOverlay() {
+  document.getElementById('globalDeleteOverlay').style.display = 'flex';
+  setTimeout(animarLixeira, 100); // Pequeno delay para garantir renderização
+}
+function esconderGlobalDeleteOverlay() {
+  document.getElementById('globalDeleteOverlay').style.display = 'none';
+}
+let blocoIdParaRemover = null;
+function pedirConfirmacaoRemoverBloco(id) {
+  blocoIdParaRemover = id;
+  // Reset modal
+  document.getElementById('modalDeleteMsg').style.display = '';
+  document.getElementById('modalDeleteSpinner').style.display = 'none';
+  document.getElementById('btnCancelDelete').disabled = false;
+  document.getElementById('btnConfirmDelete').disabled = false;
+  document.getElementById('btnCloseModalDelete').disabled = false;
+  const modal = new bootstrap.Modal(document.getElementById('confirmDeleteModal'));
+  modal.show();
+}
+function removerBloco(id, tentativas=0) {
+  sincronizarCamposParaBlocos();
+  const idx = blocos.findIndex(b => b.id === id);
+  if (idx !== -1) {
+    const bloco = blocos[idx];
+    if (bloco.salvoNoBackend === true) {
+      fetch('/mensagens/api/remover-bloco/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({uid: bloco.uid})
+      })
+      .then(async resp => {
+        if (resp.status === 423 && tentativas < 3) {
+          await new Promise(res => setTimeout(res, 2000));
+          removerBloco(id, tentativas+1);
+          return;
+        }
+        const contentType = resp.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          fecharModalRemoverBloco();
+          return;
+        }
+        let data = await resp.json();
+        if (data.success) {
+          blocos.splice(idx,1);
+          if (!IS_EDICAO_MENSAGEM) salvarDraft();
+          renderTodosBlocos();
+          atualizarOrdemBlocos();
+          fecharModalRemoverBloco();
+        } else {
+          fecharModalRemoverBloco();
+        }
+      })
+      .catch(() => {
+        fecharModalRemoverBloco();
+      });
+    } else {
+      if (["arquivo","video","audio","imagem"].includes(bloco.tipo) && bloco.arquivo_nome) {
+        excluirArquivoNoServidor(bloco.arquivo_nome, () => {
+          blocos.splice(idx,1);
+          if (!IS_EDICAO_MENSAGEM) salvarDraft();
+          renderTodosBlocos();
+          atualizarOrdemBlocos();
+          fecharModalRemoverBloco();
+        });
+      } else {
+        blocos.splice(idx,1);
+        if (!IS_EDICAO_MENSAGEM) salvarDraft();
+        renderTodosBlocos();
+        atualizarOrdemBlocos();
+        fecharModalRemoverBloco();
+      }
+    }
+  } else {
+    fecharModalRemoverBloco();
+  }
+}
+function fecharModalRemoverBloco() {
+  blocoIdParaRemover = null;
+  document.getElementById('modalDeleteMsg').style.display = '';
+  document.getElementById('modalDeleteSpinner').style.display = 'none';
+  document.getElementById('btnCancelDelete').disabled = false;
+  document.getElementById('btnConfirmDelete').disabled = false;
+  document.getElementById('btnCloseModalDelete').disabled = false;
+  const modal = bootstrap.Modal.getInstance(document.getElementById('confirmDeleteModal'));
+  if (modal) modal.hide();
+}
+function moverBloco(id, dir) {
+  sincronizarCamposParaBlocos();
+  const idx = blocos.findIndex(b => b.id === id);
+  const novo = idx+dir;
+  if (novo < 0 || novo >= blocos.length) return;
+  [blocos[idx], blocos[novo]] = [blocos[novo], blocos[idx]];
+  if (!IS_EDICAO_MENSAGEM) salvarDraft();
+  renderTodosBlocos();
+  atualizarOrdemBlocos();
+}
+function editarArquivoBloco(id) {
+  const bloco = blocos.find(b => b.id === id);
+  if (bloco) {
+    if (bloco.arquivo_nome) {
+      excluirArquivoNoServidor(bloco.arquivo_nome, () => {
+        bloco.arquivo_nome = null;
+        bloco.arquivo_nome_original = null;
+        bloco.editandoArquivo = true;
+        renderTodosBlocos();
+        atualizarOrdemBlocos();
+        if (!IS_EDICAO_MENSAGEM) salvarDraft();
+      });
+    } else {
+      bloco.editandoArquivo = true;
+      renderTodosBlocos();
+      atualizarOrdemBlocos();
+      if (!IS_EDICAO_MENSAGEM) salvarDraft();
+    }
+  }
+}
+function atualizarOrdemBlocos() {
+  // Atualiza o atributo data-field-order de cada bloco no DOM
+  const lista = document.getElementById('blocosLista');
+  Array.from(lista.children).forEach((el, idx) => {
+    el.setAttribute('data-field-order', idx);
+  });
+}
+// Alternância de campos de agendamento
+function toggleAgendamento() {
+  var tipo = null;
+  // Tenta pegar o valor do radio selecionado
+  var radios = document.querySelectorAll('input[name="tipo"]');
+  radios.forEach(function(radio) {
+    if (radio.checked) tipo = radio.value;
+  });
+  // Fallback para select (caso seja select)
+  if (!tipo) {
+    var select = document.getElementById('id_tipo');
+    if (select) tipo = select.value;
+  }
+  var unicoDiv = document.getElementById('agendamento-unico');
+  var recorrenteDiv = document.getElementById('agendamento-recorrente');
+  if (unicoDiv && recorrenteDiv) {
+    unicoDiv.style.display = tipo === 'unico' ? 'block' : 'none';
+    recorrenteDiv.style.display = tipo === 'recorrente' ? 'block' : 'none';
+  }
+
+  // Limpa campos do tipo não selecionado
+  if (tipo === 'unico') {
+    // Limpa recorrente
+    document.querySelectorAll('input[name="dias_semana"]').forEach(cb => cb.checked = false);
+    if (document.getElementById('id_horario')) document.getElementById('id_horario').value = '';
+    if (document.getElementById('id_data_inicio')) document.getElementById('id_data_inicio').value = '';
+    if (document.getElementById('id_data_fim')) document.getElementById('id_data_fim').value = '';
+  } else if (tipo === 'recorrente') {
+    // Limpa único
+    if (document.getElementById('id_agendado_para')) document.getElementById('id_agendado_para').value = '';
+  }
+
+  // Salva o draft imediatamente após a troca
+  if (!IS_EDICAO_MENSAGEM) salvarDraft();
+}
+// Garante que o evento funcione para radio ou select
+function bindTipoChange() {
+  var radios = document.querySelectorAll('input[name="tipo"]');
+  radios.forEach(function(radio) {
+    radio.addEventListener('change', toggleAgendamento);
+  });
+  var select = document.getElementById('id_tipo');
+  if (select) select.addEventListener('change', toggleAgendamento);
+}
+document.addEventListener('DOMContentLoaded', function() {
+  mostrarLoading();
+  bindTipoChange();
+  toggleAgendamento();
+  // Inicialização dos blocos vindos do backend OU inicialização vazia para criação
+  const backendBlocos = document.getElementById('blocos_backend');
+  if (backendBlocos) {
+    const blocosBackend = JSON.parse(backendBlocos.textContent);
+    console.log('blocosBackend:', blocosBackend); // DEBUG
+    blocos = blocosBackend.map((b, i) => {
+      let bloco = {
+        tipo: b.tipo,
+        conteudo: b.conteudo || '',
+        arquivo: null,
+        arquivo_nome: b.arquivo_nome || null,
+        arquivo_nome_original: b.arquivo_nome_original || null,
+        caption: b.caption || '',
+        editandoArquivo: b.editandoArquivo || false,
+        id: blocoIdCounter++,
+        uid: b.uid || gerarUUID(),
+        salvoNoBackend: true
+      };
+      return bloco;
+    });
+    verificarArquivosBlocos(() => {
+      esconderLoading();
+      renderTodosBlocos();
+      atualizarOrdemBlocos();
+    });
+  } else {
+    esconderLoading();
+    // Criação: garantir renderização inicial (lista vazia)
+    renderTodosBlocos();
+    atualizarOrdemBlocos();
+  }
+  if (!IS_EDICAO_MENSAGEM) {
+    inicializarDraft();
+    // Salvar rascunho ao editar campos principais do formulário
+    ['id_titulo','id_canal','id_tipo','id_agendado_para','id_dias_semana','id_horario','id_data_inicio','id_data_fim'].forEach(function(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('change', function() { if (!IS_EDICAO_MENSAGEM) salvarDraft(); });
+        el.addEventListener('input', function() { if (!IS_EDICAO_MENSAGEM) salvarDraft(); });
+      }
+    });
+    // Adiciona evento para todos os checkboxes de dias da semana
+    document.querySelectorAll('input[name="dias_semana"]').forEach(function(cb) {
+      cb.addEventListener('change', function() { if (!IS_EDICAO_MENSAGEM) salvarDraft(); });
+    });
+  }
+  // --- INÍCIO: Garantir blocos_json e impedir submit sem blocos ---
+  const form = document.getElementById('msgForm');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      sincronizarCamposParaBlocos();
+      const erros = validarFormulario();
+      if (erros.length > 0) {
+        e.preventDefault();
+        showAlertModal('Por favor, corrija os seguintes erros antes de salvar:<br><ul style="margin-top:8px;">' + erros.map(e => `<li>${e}</li>`).join('') + '</ul>');
+        return false;
+      }
+      document.getElementById('blocos_json').value = JSON.stringify(blocos);
+    });
+  }
+  // --- FIM ---
+  document.getElementById('btnConfirmDelete').onclick = function() {
+    if (blocoIdParaRemover !== null) {
+      // Animação de processando
+      document.getElementById('modalDeleteMsg').style.display = 'none';
+      document.getElementById('modalDeleteSpinner').style.display = '';
+      document.getElementById('btnCancelDelete').disabled = true;
+      document.getElementById('btnConfirmDelete').disabled = true;
+      document.getElementById('btnCloseModalDelete').disabled = true;
+      removerBloco(blocoIdParaRemover);
+    }
+  };
+});
+function inicializarCKEditors() {
+  document.querySelectorAll('.upload-caption-input').forEach(function(textarea) {
+    // Se já existe um editor para esse textarea, destrua antes de criar outro
+    if (captionEditors[textarea.id]) {
+      captionEditors[textarea.id].destroy().then(() => {
+        delete captionEditors[textarea.id];
+        criarEditor(textarea);
+      });
+    } else {
+      criarEditor(textarea);
+    }
+  });
+}
+function criarEditor(textarea, tipo, blocoId) {
+  if (typeof ClassicEditor === 'undefined') {
+    console.error('ClassicEditor (CKEditor) não está carregado!');
+    return;
+  }
+  ClassicEditor.create(textarea, {
+    toolbar: ['bold', 'italic', 'bulletedList', 'numberedList', 'undo', 'redo', 'link']
+  }).then(editor => {
+    captionEditors[textarea.id] = editor;
+    editor.model.document.on('change:data', () => {
+      if (tipo === 'caption') {
+        updateBlocoCaption(blocoId, editor.getData());
+      } else if (tipo === 'texto') {
+        updateBlocoConteudo(blocoId, editor.getData());
+      }
+    });
+    console.log('CKEditor aplicado em:', textarea.id);
+  }).catch(e => {
+    console.error('Erro ao inicializar CKEditor:', e);
+  });
+}
+function adicionarInlineButton(blocoId) {
+  const bloco = blocos.find(b => b.id === blocoId);
+  let botoes = [];
+  try { botoes = bloco.conteudo ? JSON.parse(bloco.conteudo) : []; } catch(e) { botoes = []; }
+  botoes.push({text: '', url: ''});
+  bloco.conteudo = JSON.stringify(botoes);
+  if (!IS_EDICAO_MENSAGEM) salvarDraft();
+  renderTodosBlocos();
+  atualizarOrdemBlocos();
+}
+function removerInlineButton(blocoId, idx) {
+  const bloco = blocos.find(b => b.id === blocoId);
+  let botoes = [];
+  try { botoes = bloco.conteudo ? JSON.parse(bloco.conteudo) : []; } catch(e) { botoes = []; }
+  botoes.splice(idx, 1);
+  bloco.conteudo = JSON.stringify(botoes);
+  renderTodosBlocos();
+  atualizarOrdemBlocos();
+}
+function updateInlineButton(blocoId, idx, campo, valor) {
+  const bloco = blocos.find(b => b.id === blocoId);
+  let botoes = [];
+  try { botoes = bloco.conteudo ? JSON.parse(bloco.conteudo) : []; } catch(e) { botoes = []; }
+  if (botoes[idx]) {
+    botoes[idx][campo] = valor;
+    bloco.conteudo = JSON.stringify(botoes);
+    if (!IS_EDICAO_MENSAGEM) salvarDraft();
+  }
+}
+function sincronizarCamposParaBlocos() {
+  // Sincroniza campos de texto (CKEditor)
+  document.querySelectorAll('.text-editor-input').forEach(textarea => {
+    const blocoId = parseInt(textarea.closest('.bloco-item').getAttribute('data-bloco-id'));
+    const bloco = blocos.find(b => b.id === blocoId);
+    if (bloco) {
+      if (captionEditors[textarea.id]) {
+        bloco.conteudo = captionEditors[textarea.id].getData();
+      } else {
+        bloco.conteudo = textarea.value;
+      }
+    }
+  });
+  // Sincroniza campos de legenda (CKEditor)
+  document.querySelectorAll('.upload-caption-input').forEach(textarea => {
+    const blocoId = parseInt(textarea.closest('.bloco-item').getAttribute('data-bloco-id'));
+    const bloco = blocos.find(b => b.id === blocoId);
+    if (bloco) {
+      if (captionEditors[textarea.id]) {
+        bloco.caption = captionEditors[textarea.id].getData();
+      } else {
+        bloco.caption = textarea.value;
+      }
+    }
+  });
+  // Sincroniza botões inline_keyboard
+  document.querySelectorAll('.bloco-item').forEach(div => {
+    const blocoId = parseInt(div.getAttribute('data-bloco-id'));
+    const bloco = blocos.find(b => b.id === blocoId);
+    if (bloco && bloco.tipo === 'inline_keyboard') {
+      let botoes = [];
+      div.querySelectorAll('#botoes-lista-' + blocoId + ' .input-group').forEach(grupo => {
+        const inputs = grupo.querySelectorAll('input');
+        botoes.push({
+          text: inputs[0] ? inputs[0].value : '',
+          url: inputs[1] ? inputs[1].value : ''
+        });
+      });
+      bloco.conteudo = JSON.stringify(botoes);
+    }
+  });
+}
+function verificarArquivosBlocos(callback) {
+  // Verifica se todos os arquivos de blocos de arquivo estão disponíveis
+  const arquivos = blocos.filter(b => ["arquivo","video","audio","imagem"].includes(b.tipo) && b.arquivo_nome && !b.editandoArquivo).map(b => b.arquivo_nome);
+  if (arquivos.length === 0) {
+    callback();
+    return;
+  }
+  let restantes = arquivos.length;
+  let tentativas = {};
+  arquivos.forEach(nome => { tentativas[nome] = 0; });
+  function checarArquivo(nome) {
+    fetch(`/media/${nome}`, {method: 'HEAD'}).then(resp => {
+      if (resp.ok) {
+        restantes--;
+        if (restantes === 0) callback();
+      } else {
+        tentarNovamente(nome);
+      }
+    }).catch(() => {
+      tentarNovamente(nome);
+    });
+  }
+  function tentarNovamente(nome) {
+    tentativas[nome]++;
+    if (tentativas[nome] < 3) {
+      setTimeout(() => checarArquivo(nome), 800);
+    } else {
+      restantes--;
+      if (restantes === 0) callback();
+    }
+  }
+  arquivos.forEach(nome => checarArquivo(nome));
+}
+function mostrarLoading() {
+  document.getElementById('loadingOverlay').style.display = 'flex';
+}
+function esconderLoading() {
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+function showAlertModal(msg) {
+  document.getElementById('alertModalMsg').innerHTML = msg;
+  const modal = new bootstrap.Modal(document.getElementById('alertModal'));
+  modal.show();
+}
+function validarFormulario() {
+  sincronizarCamposParaBlocos();
+  let erros = [];
+  // Título
+  const titulo = document.getElementById('id_titulo')?.value.trim();
+  if (!titulo) erros.push('Preencha o título da mensagem.');
+  // Canal
+  const canal = document.getElementById('id_canal')?.value;
+  if (!canal) erros.push('Selecione o canal.');
+  // Tipo
+  const tipo = document.getElementById('id_tipo')?.value;
+  if (!tipo) erros.push('Selecione o tipo de agendamento.');
+  // Agendamento
+  if (tipo === 'unico') {
+    const agendado = document.getElementById('id_agendado_para')?.value;
+    if (!agendado) erros.push('Preencha a data/hora do agendamento único.');
+  } else if (tipo === 'recorrente') {
+    const dias = Array.from(document.querySelectorAll('input[name="dias_semana"]:checked'));
+    const horario = document.getElementById('id_horario')?.value;
+    const data_inicio = document.getElementById('id_data_inicio')?.value;
+    if (dias.length === 0) erros.push('Selecione pelo menos um dia da semana para o agendamento recorrente.');
+    if (!horario) erros.push('Preencha o horário do agendamento recorrente.');
+    if (!data_inicio) erros.push('Preencha a data de início do agendamento recorrente.');
+  }
+  // Blocos
+  if (!blocos || blocos.length === 0) {
+    erros.push('Adicione pelo menos um bloco à mensagem.');
+  } else {
+    blocos.forEach((bloco, idx) => {
+      if (bloco.tipo === 'texto' && (!bloco.conteudo || !bloco.conteudo.trim())) {
+        erros.push(`Bloco ${idx+1}: preencha o texto.`);
+      }
+      if (["arquivo","imagem","video","audio"].includes(bloco.tipo) && !bloco.arquivo_nome) {
+        erros.push(`Bloco ${idx+1}: selecione um arquivo para o bloco de ${bloco.tipo}.`);
+      }
+      if (bloco.tipo === 'inline_keyboard') {
+        let botoes = [];
+        try { botoes = bloco.conteudo ? JSON.parse(bloco.conteudo) : []; } catch(e) { botoes = []; }
+        if (!botoes.length) erros.push(`Bloco ${idx+1}: adicione pelo menos um botão.`);
+        botoes.forEach((btn, i) => {
+          if (!btn.text || !btn.text.trim()) erros.push(`Bloco ${idx+1}: botão ${i+1} sem texto.`);
+          if (!btn.url || !btn.url.trim()) erros.push(`Bloco ${idx+1}: botão ${i+1} sem URL.`);
+        });
+      }
+    });
+  }
+  return erros;
+}
+</script>
+<!-- Modal de confirmação de remoção de bloco -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px;">
+      <div class="modal-header" style="border-bottom:0;">
+        <h5 class="modal-title" id="confirmDeleteModalLabel"><i class="bi bi-trash-fill text-danger me-2"></i>Remover bloco</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar" id="btnCloseModalDelete"></button>
+      </div>
+      <div class="modal-body" style="font-size:1.1rem;min-height:60px;display:flex;align-items:center;justify-content:center;flex-direction:column;">
+        <span id="modalDeleteMsg">Tem certeza que deseja remover este bloco? Esta ação é irreversível.</span>
+        <div id="modalDeleteSpinner" style="display:none;margin-top:12px;">
+          <div class="spinner-border text-danger" role="status"><span class="visually-hidden">Processando...</span></div>
+          <div style="color:#d32f2f;font-size:1rem;margin-top:0.5rem;">Removendo bloco...</div>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top:0;">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="btnCancelDelete">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="btnConfirmDelete">Remover</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Modal de aviso -->
+<div class="modal fade" id="alertModal" tabindex="-1" aria-labelledby="alertModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:14px;">
+      <div class="modal-header" style="border-bottom:0;">
+        <h5 class="modal-title" id="alertModalLabel"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Atenção</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" id="alertModalMsg" style="font-size:1.1rem;min-height:40px;display:flex;align-items:center;justify-content:center;flex-direction:column;">
+        <!-- Mensagem será inserida via JS -->
+      </div>
+      <div class="modal-footer" style="border-top:0;">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

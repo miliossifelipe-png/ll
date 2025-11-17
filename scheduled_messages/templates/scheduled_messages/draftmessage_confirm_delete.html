@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5" style="max-width: 700px;">
+  <div class="card p-4">
+    <h4>Confirmação de Exclusão de Rascunho</h4>
+    <p>Tem certeza que deseja excluir o seguinte rascunho?</p>
+    <ul>
+      <li><strong>{{ draft.dados.titulo|default:'(Sem título)' }}</strong></li>
+      <li>Status: <span class="badge bg-info text-dark">{{ draft.status|capfirst }}</span></li>
+      <li>Última edição: {{ draft.atualizado_em|date:'d/m/Y H:i' }}</li>
+    </ul>
+    <form method="post">{% csrf_token %}
+      <button type="submit" class="btn btn-danger">Sim, excluir rascunho</button>
+      <a href="{% url 'scheduled_message_list' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+  </div>
+</div>
+{% endblock %} 

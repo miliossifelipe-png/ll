@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-br" style="min-height: 100vh;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agendamento de Mensagens Telegram</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+</head>
+{% load static %}
+<body style="min-height: 100vh; display: flex; flex-direction: column;">
+<nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
+  <div class="container">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+      <img src="{% static 'img/logo.png' %}" alt="Telexta" style="height: 36px; width: auto; vertical-align: middle;" />
+    </a>
+    {% if user.is_authenticated %}
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarNav">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a class="nav-link text-dark" href="/">
+            <i class="bi bi-house-door"></i> Home
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link text-dark" href="/canais/">
+            <i class="bi bi-collection"></i> Canais
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link text-dark" href="/mensagens/">
+            <i class="bi bi-chat-dots"></i> Mensagens
+          </a>
+        </li>
+      </ul>
+      <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+        <li class="nav-item d-flex align-items-center">
+          <span class="nav-link text-dark" style="font-size:1.08rem;">
+            <i class="bi bi-person-circle me-1"></i>{{ user.get_username }}
+          </span>
+          <a class="nav-link text-danger fw-semibold ms-2" href="/logout/">
+            <i class="bi bi-box-arrow-right"></i> Sair
+          </a>
+        </li>
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</nav>
+<style>
+  .navbar-nav .nav-link.text-dark:hover, .navbar-nav .nav-link.text-dark:focus {
+    color: #111 !important;
+    font-weight: normal !important;
+  }
+</style>
+<main style="margin-top: 70px; flex: 1 0 auto;">
+  {% block content %}{% endblock %}
+</main>
+<footer class="bg-light text-center text-muted py-3 mt-auto" style="font-size: 0.92em; border-top: 1px solid #e3e3e3;">
+  &copy; {% now 'Y' %} Telexta. Todos os direitos reservados.<br>
+  <span>Desenvolvido por <a href="https://demandareal.com.br/" target="_blank" rel="noopener" style="color:#495057; text-decoration:underline; font-weight:500;">Demanda Real</a></span>
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
